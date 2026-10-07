@@ -2,9 +2,9 @@
 
 A fully static daily NFL roster-chain browser game. Built with Vite and vanilla TypeScript, with no backend, accounts, paid services, or runtime API requests.
 
-## Phase 1: playable prototype
+## Running
 
-The current game uses a small **synthetic** dataset. Player names are familiar, but connections and week counts are illustrative, incomplete, and not verified NFL facts. IDs beginning with `demo-` are fixture IDs, not GSIS IDs. Two same-named Mike Williams entries exercise autocomplete disambiguation. The real pipeline will replace this fixture in later phases.
+The game loads the generated nflverse data in `public/data/` at startup (about 1.1 MB gzipped) using Vite's `BASE_URL`, so it works from a GitHub Pages subpath.
 
 ```sh
 npm install
@@ -13,38 +13,38 @@ npm test
 npm run build
 ```
 
-The seven demo puzzles repeat on a deterministic local-date schedule anchored to October 6, 2026, puzzle #1. This is not the eventual 365-day production schedule. Players viewing the same local calendar date get the same puzzle. Dates before the prototype launch can have nonpositive puzzle numbers.
+Each local date maps to the puzzle stored for that date in `puzzles.json`. Dates before or after the generated calendar, or a missing date inside it, show an explicit "no puzzle" screen; another day's puzzle is never substituted.
 
 ## Approved Rules
 
 - Data coverage: 2002 onward.
 - A teammate connection requires membership on the same team's roster in the same regular-season or postseason week. Sharing only a team and season is insufficient if the players' roster weeks do not overlap.
 - Practice squad, injured reserve, and inactive players count. Offseason/camp rosters do not.
-- Enter intermediate players through autocomplete. Suggestions show only name, jersey number, and career years, never teams.
+- Enter intermediate players through autocomplete. Suggestions show only name, jersey number, position, and career years, never teams.
 - A non-teammate entry costs one miss and is not added. Three misses end the puzzle.
 - Undo removes the most recent accepted intermediate player without charging or refunding misses. Completed puzzles are final.
 - The game auto-solves when a newly accepted intermediate player connects to END. END is not counted as an intermediate player.
 - Par is the shortest number of intermediate players: BFS edge distance minus one.
 - Give-up and losses reveal one optimal path with roster evidence.
 
-Progress and completed results are stored in localStorage by dataset version and local date. Demo records will remain separate from production records. Blocked browser storage does not prevent play, but progress cannot persist. A changed local date is detected on focus, visibility changes, and gameplay actions.
+Progress and completed results are stored in localStorage by dataset version and local date. Changing the data version starts fresh saved progress. Blocked browser storage does not prevent play, but progress cannot persist. A changed local date is detected on focus, visibility changes, and gameplay actions.
 
 ## Structure
 
-- `src/game.ts`: framework-independent rules and BFS.
-- `src/fixtures/demo.ts`: synthetic player metadata, edges, and daily fixture selection.
+- `src/game.ts`: framework-independent rules and the roster-week teammate check (sorted membership intersection; legacy nflverse codes ARZ/BLT/CLV/HST/SL display as ARI/BAL/CLE/HOU/STL).
+- `src/data.ts`: loads and cross-checks the JSON files, looks up the puzzle for a date, and ranks player search.
 - `src/storage.ts`: saved progress validation and completed-result storage.
-- `src/main.ts`: accessible autocomplete, chain display, and give-up confirmation.
+- `src/main.ts`: loading/error/no-puzzle states, accessible autocomplete, chain display, and give-up confirmation.
 - `src/styles.css`: responsive dark theme and self-hosted fonts.
-- `src/*.test.ts`: focused game and persistence tests.
+- `src/fixtures/demo.ts`: small **synthetic** test fixture in the generated-file format (not real NFL facts).
+- `src/realData.test.ts`: plays all 365 generated puzzles through the browser code path.
 
 ## Remaining Phases
 
-3. Load real versioned JSON using Vite's base URL, validate it, and handle unpublished dates without substituting another day's puzzle.
 4. Statistics/streaks modal, spoiler-free clipboard sharing, how-to-play modal, and additional accessibility polish. Completed records are already saved for this phase.
-5. GitHub Pages Actions deployment, repository base-path configuration, and final regeneration/deployment commands. These are intentionally not implemented before phase approval.
+5. GitHub Pages Actions deployment and repository base-path configuration (remote: `drhinehart/six-degrees`).
 
-The site will ship its graph and example solutions as public files. It cannot prevent someone inspecting those files for answers. No private data or credentials should be included in static assets.
+The site ships its roster data and solutions as public files. It cannot prevent someone inspecting those files for answers. No private data or credentials should be included in static assets.
 
 ## Data Sources
 
@@ -53,14 +53,17 @@ The site will ship its graph and example solutions as public files. It cannot pr
 
 The former gameday-active/played-together restriction has been removed. Snap counts and play-level participation are not required for the approved roster-membership rule.
 
-## Phase 2: regenerate real data
+## Regenerating data
 
 The local-only pipeline reads nflverse weekly roster CSV releases from 2002 onward and defaults to complete seasons through the previous year. It uses only the Python 3.10+ standard library:
 
 ```sh
 python3 pipeline/build_data.py --start-season 2002 --end-season 2025 --start-date 2026-10-06
 python3 -m unittest discover -s pipeline -v
+python3 pipeline/validate_data.py
 ```
+
+`validate_data.py` independently checks the generated files: structure and derived player fields, the manifest's edge count, every puzzle (consecutive dates, valid links, unique endpoint pairs, and a BFS proof that par is the true shortest), and a rebuild of every roster membership, name, number, and position from the cached nflverse CSVs (`--skip-source` skips that last step). Run it after every regeneration.
 
 The generator streams season CSVs and caches source files under `pipeline/.cache/`; those source files are not published. Use `--offline` to require all requested seasons to already be cached. `--min-roster-weeks` and `--max-endpoints` control the notable-player pool if a different source range is used. `--seed` makes puzzle selection reproducible. Keep the same `--start-date` and seed when regenerating a published 365-day calendar.
 
@@ -82,4 +85,4 @@ Generated for puzzle dates October 6, 2026 through October 5, 2027: 14,660 playe
 | `manifest.json` | 743 B | 439 B |
 | **Total** | **7,080,988 B** | **1,113,625 B** |
 
-The generated graph contains 2,029,205 connected player pairs; those expanded edges are used for BFS puzzle generation but are not shipped. Gzip figures estimate transfer size. `rosters.json` stores membership rows for client intersections; Phase 3 should preserve that compact representation rather than expand an all-pairs graph.
+The generated graph contains 2,029,205 connected player pairs; those expanded edges are used for BFS puzzle generation but are not shipped. Gzip figures estimate transfer size. `rosters.json` stores membership rows for client intersections; The browser preserves that compact representation rather than expanding an all-pairs graph.

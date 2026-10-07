@@ -34,9 +34,10 @@ h1 { font-size: 32px; line-height: 1.1; }
 .par { text-align: center; min-width: 54px; border-left: 1px solid var(--line); padding-left: 18px; }
 .par span { display: block; font-size: 11px; color: var(--gold); }
 .par strong { font: 600 38px 'Barlow Condensed', sans-serif; }
-.demo-notice { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); margin: 20px 0 26px; line-height: 1.5; }
-.demo-dot { flex-shrink: 0; width: 6px; height: 6px; background: var(--gold); border-radius: 50%; }
-.route { position: relative; }
+.status-panel { padding: 48px 0 32px; }
+.status-panel h2 { font-size: 36px; color: var(--gold); }
+.status-panel p:not(.eyebrow) { color: var(--muted); font-size: 14px; line-height: 1.5; }
+.route { position: relative; margin-top: 26px; }
 .route::before { position: absolute; top: 37px; bottom: 37px; left: 19px; width: 1px; background: var(--line); content: ''; }
 .player-row, .empty-row { position: relative; display: flex; align-items: center; gap: 18px; }
 .player-row { padding: 16px 0; min-height: 99px; }
@@ -90,7 +91,9 @@ input::placeholder { color: #a5afa7; }
 .result > p:not(.eyebrow) { color: var(--muted); font-size: 14px; }
 .optimal-path { padding-left: 20px; font-size: 14px; }
 .optimal-path li { padding: 8px 0 8px 4px; }
+.optimal-path em { font-style: normal; font-size: 12px; color: var(--muted); margin-left: 8px; }
 .optimal-path span { display: block; margin-top: 4px; font-size: 12px; line-height: 1.5; color: var(--muted); }
+footer a { color: inherit; }
 footer { display: flex; justify-content: space-between; gap: 14px; border-top: 1px solid var(--line); padding-top: 20px; margin-top: 30px; font-size: 9px; color: #8f9a91; line-height: 1.5; }
 dialog { background: #202722; color: #f3f3ed; width: min(420px, calc(100% - 32px)); padding: 22px; border: 1px solid #59685b; border-radius: 8px; }
 dialog::backdrop { background: #000a; }
@@ -109,7 +112,7 @@ dialog p { color: var(--muted); line-height: 1.5; font-size: 14px; }
   main { padding: 27px 20px 20px; }
   h1 { font-size: 28px; }
   #puzzle-number { font-size: 15px; margin-left: 8px; }
-  .demo-notice { margin: 18px 0 15px; }
+  .route { margin-top: 18px; }
   .player-row { min-height: 91px; }
   .player-details h2 { font-size: 26px; }
   footer { flex-wrap: wrap; }

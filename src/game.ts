@@ -1,46 +1,48 @@
-import type { Connection, Dataset, GameState, Puzzle } from './types'
+import type { Connection, GameState, PlayersFile, Puzzle, RostersFile } from './types'
 
+// nflverse used these codes for 2002–2015 and the standard ones afterwards; seasons never overlap.
+const TEAM_ALIASES: Record<string, string> = { ARZ: 'ARI', BLT: 'BAL', CLV: 'CLE', HST: 'HOU', SL: 'STL' }
+
+export function displayTeam(code: string): string {
+  return TEAM_ALIASES[code] ?? code
+}
+
+/** Teammate checks by intersecting each player's sorted roster-week memberships; no pair list is built. */
 export class TeammateGraph {
-  private neighbors = new Map<string, Map<string, Connection[]>>()
+  private indexes = new Map<string, number>()
+  private rosters: RostersFile
 
-  constructor(dataset: Dataset) {
-    for (const player of dataset.players) this.neighbors.set(player.id, new Map())
-    for (const edge of dataset.edges) {
-      const [first, second] = edge.players
-      if (!this.neighbors.has(first) || !this.neighbors.has(second)) {
-        throw new Error('Connection references an unknown player')
-      }
-      this.neighbors.get(first)!.set(second, edge.connections)
-      this.neighbors.get(second)!.set(first, edge.connections)
+  constructor(players: PlayersFile, rosters: RostersFile) {
+    this.rosters = rosters
+    if (rosters.playerMemberships.length !== players.players.length) {
+      throw new Error('Roster memberships do not match the player list')
     }
+    players.players.forEach((player, index) => this.indexes.set(player.id, index))
   }
 
   connection(first: string, second: string): Connection[] | undefined {
-    return this.neighbors.get(first)?.get(second)
-  }
-
-  shortestPath(start: string, end: string): string[] | undefined {
-    const queue = [start]
-    const previous = new Map<string, string | null>([[start, null]])
-    for (let index = 0; index < queue.length; index++) {
-      const current = queue[index]
-      if (current === end) {
-        const path: string[] = []
-        let cursor: string | null = end
-        while (cursor !== null) {
-          path.unshift(cursor)
-          cursor = previous.get(cursor)!
-        }
-        return path
-      }
-      for (const neighbor of this.neighbors.get(current)?.keys() ?? []) {
-        if (!previous.has(neighbor)) {
-          previous.set(neighbor, current)
-          queue.push(neighbor)
-        }
+    const firstIndex = this.indexes.get(first)
+    const secondIndex = this.indexes.get(second)
+    if (firstIndex === undefined || secondIndex === undefined || first === second) return undefined
+    const a = this.rosters.playerMemberships[firstIndex]
+    const b = this.rosters.playerMemberships[secondIndex]
+    const weeks = new Map<string, Connection>()
+    for (let i = 0, j = 0; i < a.length && j < b.length;) {
+      if (a[i] < b[j]) i++
+      else if (a[i] > b[j]) j++
+      else {
+        const [teamIndex, season] = this.rosters.rosterKeys[a[i]]
+        const team = displayTeam(this.rosters.teams[teamIndex].id)
+        const key = `${season}:${team}`
+        const connection = weeks.get(key) ?? { team, season, weeks: 0 }
+        connection.weeks++
+        weeks.set(key, connection)
+        i++
+        j++
       }
     }
-    return undefined
+    if (!weeks.size) return undefined
+    return [...weeks.values()].sort((x, y) => x.season - y.season || x.team.localeCompare(y.team))
   }
 }
 
