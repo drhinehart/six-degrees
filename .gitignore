@@ -26,3 +26,19 @@ __pycache__/
 *.njsproj
 *.sln
 *.sw?
+
+# Local environment and credentials
+.env
+.env.*
+.claude/settings.local.json
+
+# Test and tool caches
+coverage/
+*.tsbuildinfo
+.pytest_cache/
+.mypy_cache/
+
+# Windows files that appear when copying into WSL
+Thumbs.db
+desktop.ini
+*:Zone.Identifier
