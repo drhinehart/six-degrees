@@ -1,6 +1,10 @@
 import { enterPlayer, newGame } from './game'
 import type { TeammateGraph } from './game'
+import { loadResults } from './stats'
 import type { GameState, Puzzle } from './types'
+
+// Completed results outlive data versions so stats and streaks survive regenerated data.
+export const RESULTS_KEY = 'six-degrees:results'
 
 type StorageAccess = Pick<Storage, 'getItem' | 'setItem'>
 
@@ -38,18 +42,12 @@ export function saveProgress(state: GameState, puzzle: Puzzle, version: string, 
   try {
     storage.setItem(progressKey(puzzle, version), JSON.stringify({ start: puzzle.start, end: puzzle.end, par: puzzle.par, state }))
     if (state.status !== 'playing') {
-      let results: Record<string, unknown> = {}
-      try {
-        const parsed = JSON.parse(storage.getItem(`six-degrees:${version}:results`) ?? '{}')
-        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) results = parsed
-      } catch {
-        results = {}
-      }
+      const results = loadResults(storage.getItem(RESULTS_KEY))
       results[puzzle.date] = {
         date: puzzle.date, number: puzzle.number, par: puzzle.par,
         strokes: state.chain.length, misses: state.misses, status: state.status,
       }
-      storage.setItem(`six-degrees:${version}:results`, JSON.stringify(results))
+      storage.setItem(RESULTS_KEY, JSON.stringify(results))
     }
     return true
   } catch {

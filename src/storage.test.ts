@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { puzzleFor } from './data'
 import { demo } from './fixtures/demo'
 import { enterPlayer, newGame } from './game'
-import { loadProgress, progressKey, saveProgress } from './storage'
+import { loadProgress, progressKey, RESULTS_KEY, saveProgress } from './storage'
 import type { Puzzle } from './types'
 
 const daily = (date: string): Puzzle => {
@@ -32,7 +32,7 @@ describe('local progress', () => {
     saveProgress(state, puzzle, version, storage)
     saveProgress(state, puzzle, version, storage)
     expect(loadProgress(puzzle, version, graph, storage)).toEqual(state)
-    expect(Object.keys(JSON.parse(values.get(`six-degrees:${version}:results`)!))).toEqual([puzzle.date])
+    expect(Object.keys(JSON.parse(values.get(RESULTS_KEY)!))).toEqual([puzzle.date])
   })
 
   it('recovers from corrupt JSON and impossible saved chains', () => {

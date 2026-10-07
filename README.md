@@ -26,14 +26,17 @@ Each local date maps to the puzzle stored for that date in `puzzles.json`. Dates
 - The game auto-solves when a newly accepted intermediate player connects to END. END is not counted as an intermediate player.
 - Par is the shortest number of intermediate players: BFS edge distance minus one.
 - Give-up and losses reveal one optimal path with roster evidence.
+- Sharing copies a spoiler-free summary (link count, score, misses, no names); phones with a share sheet use it instead. If the clipboard is blocked, the text appears in a box to copy by hand.
+- The how-to-play dialog opens on the first visit and notes that practice squad/reserve records are complete only from 2017.
 
-Progress and completed results are stored in localStorage by dataset version and local date. Changing the data version starts fresh saved progress. Blocked browser storage does not prevent play, but progress cannot persist. A changed local date is detected on focus, visibility changes, and gameplay actions.
+Progress and completed results are stored in localStorage by dataset version and local date. Changing the data version starts fresh in-progress games; completed results live under the unversioned `six-degrees:results` key, so stats and streaks survive data regenerations. A streak counts consecutive daily wins and stays alive until today's puzzle is finished. Blocked browser storage does not prevent play, but progress cannot persist. A changed local date is detected on focus, visibility changes, and gameplay actions.
 
 ## Structure
 
 - `src/game.ts`: framework-independent rules and the roster-week teammate check (sorted membership intersection; legacy nflverse codes ARZ/BLT/CLV/HST/SL display as ARI/BAL/CLE/HOU/STL).
 - `src/data.ts`: loads and cross-checks the JSON files, looks up the puzzle for a date, and ranks player search.
 - `src/storage.ts`: saved progress validation and completed-result storage.
+- `src/stats.ts`: played/win %/streaks, outcome distribution, and spoiler-free share text.
 - `src/main.ts`: loading/error/no-puzzle states, accessible autocomplete, chain display, and give-up confirmation.
 - `src/styles.css`: responsive dark theme and self-hosted fonts.
 - `src/fixtures/demo.ts`: small **synthetic** test fixture in the generated-file format (not real NFL facts).
@@ -41,7 +44,6 @@ Progress and completed results are stored in localStorage by dataset version and
 
 ## Remaining Phases
 
-4. Statistics/streaks modal, spoiler-free clipboard sharing, how-to-play modal, and additional accessibility polish. Completed records are already saved for this phase.
 5. GitHub Pages Actions deployment and repository base-path configuration (remote: `drhinehart/six-degrees`).
 
 The site ships its roster data and solutions as public files. It cannot prevent someone inspecting those files for answers. No private data or credentials should be included in static assets.

@@ -58,7 +58,7 @@ export function enterPlayer(state: GameState, playerId: string, puzzle: Puzzle, 
   const previous = state.chain.at(-1) ?? puzzle.start
   if (!graph.connection(previous, playerId)) {
     const misses = state.misses + 1
-    return { state: { ...state, misses, status: misses === 3 ? 'lost' : 'playing' }, message: 'No shared roster. That counts as a miss.' }
+    return { state: { ...state, misses, status: misses === 3 ? 'lost' : 'playing' }, message: 'No shared roster week in our records. That counts as a miss.' }
   }
   const won = Boolean(graph.connection(playerId, puzzle.end))
   return {

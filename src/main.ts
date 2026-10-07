@@ -2,11 +2,12 @@ import '@fontsource/barlow/400.css'
 import '@fontsource/barlow/600.css'
 import '@fontsource/barlow-condensed/600.css'
 import './styles.css'
-import { ArrowRight, RotateCcw, Search, X, createIcons } from 'lucide'
+import { ArrowRight, ChartColumn, CircleHelp, RotateCcw, Search, X, createIcons } from 'lucide'
 import { loadGameData, puzzleFor } from './data'
 import type { GameData, PuzzleLookup } from './data'
 import { enterPlayer, giveUp, golfScore, localDate, newGame, undo } from './game'
-import { loadProgress, saveProgress } from './storage'
+import { computeStats, loadResults, outcome, shareText } from './stats'
+import { loadProgress, RESULTS_KEY, saveProgress } from './storage'
 import type { GameState, Player, Puzzle } from './types'
 
 const app = document.querySelector<HTMLDivElement>('#app')!
@@ -15,12 +16,12 @@ const jersey = (player: Player): string => player.number === null ? '#—' : `#$
 const years = (player: Player): string => player.firstSeason === player.lastSeason ? String(player.firstSeason) : `${player.firstSeason}–${player.lastSeason}`
 const identity = (player: Player): string => [player.name, jersey(player), player.position, years(player)].filter(Boolean).join(' · ')
 const formatDate = (date: string): string => new Date(`${date}T12:00:00`).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })
-const icons = () => createIcons({ icons: { ArrowRight, RotateCcw, Search, X } })
+const icons = () => createIcons({ icons: { ArrowRight, ChartColumn, CircleHelp, RotateCcw, Search, X } })
 
 app.innerHTML = `
   <header class="masthead">
     <a class="wordmark" href="${import.meta.env.BASE_URL}" aria-label="Six Degrees home"><img src="${import.meta.env.BASE_URL}football.svg" alt="" width="32" height="32">SIX DEGREES<span class="edition">NFL</span></a>
-    <span class="daily-label">THE DAILY ROSTER CHAIN</span>
+    <div class="header-actions"><span class="daily-label">THE DAILY ROSTER CHAIN</span><button id="open-help" class="icon-button" aria-label="How to play" title="How to play"><i data-lucide="circle-help" aria-hidden="true"></i></button><button id="open-stats" class="icon-button" aria-label="Statistics" title="Statistics"><i data-lucide="chart-column" aria-hidden="true"></i></button></div>
   </header>
   <main>
     <section id="status-panel" class="status-panel" role="status"><p class="eyebrow">LOADING</p><h2>Pulling rosters…</h2><p>Every NFL roster week since 2002.</p></section>
@@ -41,9 +42,51 @@ app.innerHTML = `
     <footer><span>SHARED ROSTER WEEKS · 2002 ONWARD · <a href="https://github.com/nflverse/nflverse-data" target="_blank" rel="noopener">DATA: NFLVERSE</a> (<a href="https://github.com/nflverse/nflverse-data/blob/main/LICENSE.md" target="_blank" rel="noopener">CC BY 4.0</a>)</span><span>ONE PUZZLE. EVERY DAY.</span></footer>
   </main>
   <dialog id="give-up-dialog" aria-labelledby="give-up-title"><div class="dialog-heading"><h2 id="give-up-title">End today's puzzle?</h2><button id="close-dialog" class="icon-button" aria-label="Close" title="Close"><i data-lucide="x" aria-hidden="true"></i></button></div><p>Your result will be marked as given up and one shortest path will be revealed.</p><div class="dialog-actions"><button id="keep-playing" class="secondary-button">Keep playing</button><button id="confirm-give-up" class="danger-button">Give up</button></div></dialog>
+  <dialog id="help-dialog" class="wide-dialog" aria-labelledby="help-title"><div class="dialog-heading"><h2 id="help-title">How to play</h2><button class="icon-button" data-close aria-label="Close" title="Close"><i data-lucide="x" aria-hidden="true"></i></button></div>
+    <ol class="rules">
+      <li>Build a chain of teammates from <strong>START</strong> to <strong>END</strong>.</li>
+      <li>Each player you add must have been on the same team's roster as the previous player during at least one of the same weeks, regular season or playoffs, from 2002 on. They don't need to have played in a game together.</li>
+      <li>Practice squad, injured reserve, and inactive players count. Offseason and training camp rosters don't.</li>
+      <li>The puzzle solves itself as soon as your latest player shares a roster week with END.</li>
+      <li><strong>Par</strong> is the fewest teammates needed. Score it like golf: fewer is better.</li>
+      <li>Entering someone who isn't a teammate is a miss. Three misses ends the puzzle. Undo removes your last player for free but doesn't give back misses.</li>
+    </ol>
+    <p class="note"><strong>About the records:</strong> practice squad and reserve lists are complete from 2017. Earlier seasons mostly include active rosters, so some real teammates from 2002–2016 won't count.</p>
+    <p>A new puzzle arrives at midnight your time. Roster data from nflverse (CC BY 4.0).</p>
+    <div class="dialog-actions"><button class="primary-button" data-close autofocus>Play</button></div>
+  </dialog>
+  <dialog id="stats-dialog" class="wide-dialog" aria-labelledby="stats-title"><div class="dialog-heading"><h2 id="stats-title">Statistics</h2><button class="icon-button" data-close aria-label="Close" title="Close"><i data-lucide="x" aria-hidden="true"></i></button></div><div id="stats-body"></div></dialog>
 `
 
 const statusPanel = document.querySelector<HTMLElement>('#status-panel')!
+const helpDialog = document.querySelector<HTMLDialogElement>('#help-dialog')!
+const statsDialog = document.querySelector<HTMLDialogElement>('#stats-dialog')!
+let storage: Storage | undefined
+try { storage = localStorage } catch { storage = undefined }
+const readStorage = (key: string): string | null => { try { return storage?.getItem(key) ?? null } catch { return null } }
+
+function renderStats() {
+  const today = localDate()
+  const results = loadResults(readStorage(RESULTS_KEY))
+  const stats = computeStats(results, today)
+  const todays = results[today] ? outcome(results[today]) : undefined
+  const tiles = [['Played', stats.played], ['Win %', stats.winRate], ['Current streak', stats.currentStreak], ['Best streak', stats.maxStreak]]
+    .map(([label, value]) => `<div class="stat"><strong>${value}</strong><span>${label}</span></div>`).join('')
+  const most = Math.max(1, ...stats.distribution.map(band => band.count))
+  const bars = stats.distribution.map(band => `<li class="${band.label === todays ? 'today' : ''}"><span class="band-label">${band.label}</span><span class="band-track">${band.count ? `<span class="band-bar" style="width: ${(band.count / most) * 100}%"></span>` : ''}</span><span class="band-count">${band.count}${band.label === todays ? '<span class="today-tag">TODAY</span>' : ''}</span></li>`).join('')
+  document.querySelector('#stats-body')!.innerHTML = `<div class="stat-tiles">${tiles}</div>${stats.played
+    ? `<h3 class="eyebrow">RESULTS</h3><ol class="distribution" aria-label="Results by outcome">${bars}</ol>`
+    : '<p>Finish a puzzle to start your stats.</p>'}${storage ? '' : '<p>Stats cannot be saved in this browser.</p>'}`
+}
+
+function openStats() {
+  renderStats()
+  statsDialog.showModal()
+}
+
+document.querySelector('#open-help')!.addEventListener('click', () => helpDialog.showModal())
+document.querySelector('#open-stats')!.addEventListener('click', openStats)
+for (const button of document.querySelectorAll('[data-close]')) button.addEventListener('click', () => button.closest('dialog')!.close())
 
 function showStatus(eyebrow: string, heading: string, detail: string, retry = false) {
   statusPanel.innerHTML = `<p class="eyebrow">${escapeHtml(eyebrow)}</p><h2>${escapeHtml(heading)}</h2><p>${escapeHtml(detail)}</p>${retry ? '<button class="secondary-button" id="retry">Try again</button>' : ''}`
@@ -63,8 +106,6 @@ function start(data: GameData) {
   const feedback = document.querySelector<HTMLParagraphElement>('#feedback')!
   const dialog = document.querySelector<HTMLDialogElement>('#give-up-dialog')!
   const submit = document.querySelector<HTMLButtonElement>('.submit')!
-  let storage: Storage | undefined
-  try { storage = localStorage } catch { storage = undefined }
   let currentDate = ''
   let puzzle: Puzzle | undefined
   let state: GameState = newGame()
@@ -132,7 +173,7 @@ function start(data: GameData) {
       const won = state.status === 'won'
       const path = puzzle.optimalPath
       result.classList.toggle('won', won)
-      result.innerHTML = `<p class="eyebrow">${won ? 'CONNECTION COMPLETE' : state.status === 'lost' ? 'THREE MISSES' : 'GIVEN UP'}</p><h2>${won ? golfScore(state.chain.length, puzzle.par) : state.status === 'lost' ? 'Missed.' : 'Until tomorrow.'}</h2><p>${won ? `Solved in ${state.chain.length} · Par ${puzzle.par}` : `Par ${puzzle.par} · One shortest path`}</p>${won ? '' : `<ol class="optimal-path">${path.map((id, index) => `<li><strong>${escapeHtml(playersById.get(id)!.name)}</strong><em>${years(playersById.get(id)!)}</em>${index > 0 ? `<span>${escapeHtml(connectionText(path[index - 1], id))}</span>` : ''}</li>`).join('')}</ol>`}`
+      result.innerHTML = `<p class="eyebrow">${won ? 'CONNECTION COMPLETE' : state.status === 'lost' ? 'THREE MISSES' : 'GIVEN UP'}</p><h2>${won ? golfScore(state.chain.length, puzzle.par) : state.status === 'lost' ? 'Missed.' : 'Until tomorrow.'}</h2><p>${won ? `Solved in ${state.chain.length} · Par ${puzzle.par}` : `Par ${puzzle.par} · One shortest path`}</p>${won ? '' : `<ol class="optimal-path">${path.map((id, index) => `<li><strong>${escapeHtml(playersById.get(id)!.name)}</strong><em>${years(playersById.get(id)!)}</em>${index > 0 ? `<span>${escapeHtml(connectionText(path[index - 1], id))}</span>` : ''}</li>`).join('')}</ol>`}<div class="result-actions"><button class="primary-button" id="share">Share result</button><button class="secondary-button" id="result-stats">Statistics</button></div><p id="share-status" role="status" aria-live="polite"></p><textarea id="share-fallback" aria-label="Result to copy" readonly rows="4" hidden></textarea>`
     }
     icons()
   }
@@ -191,6 +232,35 @@ function start(data: GameData) {
     if (state.status === 'playing') input.focus()
   }
 
+  async function share() {
+    if (!puzzle || state.status === 'playing') return
+    const text = shareText(puzzle, state, `${location.origin}${import.meta.env.BASE_URL}`)
+    const status = document.querySelector('#share-status')!
+    if (navigator.share && matchMedia('(pointer: coarse)').matches) {
+      try {
+        await navigator.share({ text })
+        return
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') return
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(text)
+      status.textContent = 'Result copied to clipboard. No player names included.'
+    } catch {
+      const fallback = document.querySelector<HTMLTextAreaElement>('#share-fallback')!
+      fallback.value = text
+      fallback.hidden = false
+      fallback.select()
+      status.textContent = 'Copying is blocked here. Copy your result from the box below.'
+    }
+  }
+
+  document.querySelector('#result')!.addEventListener('click', event => {
+    const target = (event.target as HTMLElement).closest('button')
+    if (target?.id === 'share') void share()
+    if (target?.id === 'result-stats') openStats()
+  })
   input.addEventListener('input', updateSuggestions)
   input.addEventListener('focus', updateSuggestions)
   input.addEventListener('keydown', event => {
@@ -244,4 +314,8 @@ function start(data: GameData) {
   loadDay(localDate())
   render()
   if (!storage) feedback.textContent = 'Progress cannot be saved in this browser.'
+  if (!readStorage('six-degrees:seen-help')) {
+    helpDialog.showModal()
+    try { storage?.setItem('six-degrees:seen-help', '1') } catch { /* shown again next visit */ }
+  }
 }
